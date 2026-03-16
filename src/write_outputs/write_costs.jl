@@ -11,6 +11,7 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
     T = inputs["T"]     # Number of time steps (hours)
     VRE_STOR = inputs["VRE_STOR"]
     VS_ELEC = !isempty(VRE_STOR) ? inputs["VS_ELEC"] : Vector{Int}[]
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
     ELECTROLYZER_ALL = !isempty(VS_ELEC) ? union(VS_ELEC, inputs["ELECTROLYZER"]) :
                        inputs["ELECTROLYZER"]
     ALLAM_CYCLE_LOX = inputs["ALLAM_CYCLE_LOX"]
@@ -33,14 +34,19 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
     if !isempty(ELECTROLYZER_ALL)
         push!(cost_list, "cHydrogenRevenue")
     end
+    if !isempty(INDUSTRIAL_LOAD)
+        push!(cost_list, "cIndustrialValue")
+    end
     dfCost = DataFrame(Costs = cost_list)
 
     cVar = value(EP[:eTotalCVarOut]) +
            (!isempty(inputs["STOR_ALL"]) ? value(EP[:eTotalCVarIn]) : 0.0) +
-           (!isempty(inputs["FLEX"]) ? value(EP[:eTotalCVarFlexIn]) : 0.0)
+           (!isempty(inputs["FLEX"]) ? value(EP[:eTotalCVarFlexIn]) : 0.0) +
+           (!isempty(INDUSTRIAL_LOAD) ? value(EP[:eTotalCVarIndustrialLoad]) : 0.0)
     cFix = value(EP[:eTotalCFix]) +
            (!isempty(inputs["STOR_ALL"]) ? value(EP[:eTotalCFixEnergy]) : 0.0) +
-           (!isempty(inputs["STOR_ASYMMETRIC"]) ? value(EP[:eTotalCFixCharge]) : 0.0)
+           (!isempty(inputs["STOR_ASYMMETRIC"]) ? value(EP[:eTotalCFixCharge]) : 0.0) +
+           (!isempty(INDUSTRIAL_LOAD) ? value(EP[:eTotalCInvIndustrialLoad]) : 0.0)
 
     cFuel = value.(EP[:eTotalCFuelOut])
 
@@ -92,6 +98,9 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
 
     if !isempty(ELECTROLYZER_ALL)
         push!(total_cost, -1 * value(EP[:eTotalHydrogenValue]))
+    end
+    if !isempty(INDUSTRIAL_LOAD)
+        push!(total_cost, -1 * value(EP[:eTotalIndustrialValue]))
     end
 
     dfCost[!, Symbol("Total")] = total_cost
@@ -160,6 +169,7 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
         tempCFuel = 0.0
         tempCStart = 0.0
         tempCNSE = 0.0
+        tempIndustrialValue = 0.0
         tempHydrogenValue = 0.0
         tempCCO2 = 0.0
 
@@ -167,6 +177,7 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
         STOR_ALL_ZONE = intersect(inputs["STOR_ALL"], Y_ZONE)
         STOR_ASYMMETRIC_ZONE = intersect(inputs["STOR_ASYMMETRIC"], Y_ZONE)
         FLEX_ZONE = intersect(inputs["FLEX"], Y_ZONE)
+        INDUSTRIAL_LOAD_ZONE = intersect(INDUSTRIAL_LOAD, Y_ZONE)
         COMMIT_ZONE = intersect(inputs["COMMIT"], Y_ZONE)
         ELECTROLYZERS_ZONE = intersect(inputs["ELECTROLYZER"], Y_ZONE)
         CCS_ZONE = intersect(inputs["CCS"], Y_ZONE)
@@ -197,6 +208,15 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
             eCVarFlex_in = sum(value.(EP[:eCVarFlex_in][FLEX_ZONE, :]))
             tempCVar += eCVarFlex_in
             tempCTotal += eCVarFlex_in
+        end
+        if !isempty(INDUSTRIAL_LOAD_ZONE)
+            eCVarIndustrialLoad = sum(value.(EP[:eCVarIndustrialLoad][INDUSTRIAL_LOAD_ZONE, :]))
+            eCInvIndustrialLoad = sum(value.(EP[:eCInvIndustrialLoad][INDUSTRIAL_LOAD_ZONE]))
+            tempCVar += eCVarIndustrialLoad
+            tempCFix += eCInvIndustrialLoad
+            tempCTotal += eCVarIndustrialLoad + eCInvIndustrialLoad
+            tempIndustrialValue -= sum(value.(EP[:eIndustrialValue][INDUSTRIAL_LOAD_ZONE, :]))
+            tempCTotal += tempIndustrialValue
         end
         if !isempty(VRE_STOR)
             gen_VRE_STOR = gen.VreStorage
@@ -325,6 +345,7 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
             tempCNSE *= ModelScalingFactor^2
             tempCStart *= ModelScalingFactor^2
             tempHydrogenValue *= ModelScalingFactor^2
+            tempIndustrialValue *= ModelScalingFactor^2
             tempCCO2 *= ModelScalingFactor^2
         end
         temp_cost_list = [
@@ -344,6 +365,9 @@ function write_costs(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
         end
         if !isempty(ELECTROLYZER_ALL)
             push!(temp_cost_list, tempHydrogenValue)
+        end
+        if !isempty(INDUSTRIAL_LOAD)
+            push!(temp_cost_list, tempIndustrialValue)
         end
 
         dfCost[!, Symbol("Zone$z")] = temp_cost_list

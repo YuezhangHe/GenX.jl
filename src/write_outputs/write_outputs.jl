@@ -85,6 +85,15 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
         println(elapsed_time_charge)
     end
 
+    if !isempty(inputs["INDUSTRIAL_LOAD"])
+        elapsed_time_industrial_summary = @elapsed write_industrial_load_summary(path,
+            inputs,
+            setup,
+            EP)
+        println("Time elapsed for writing industrial load summary is")
+        println(elapsed_time_industrial_summary)
+    end
+
     if output_settings_d["WriteCapacityFactor"]
         elapsed_time_capacityfactor = @elapsed write_capacityfactor(path, inputs, setup, EP)
         println("Time elapsed for writing capacity factor is")

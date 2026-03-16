@@ -10,6 +10,7 @@ Possible values:
 - :Storage
 - :MustRun
 - :FlexDemand
+- :IndustrialLoad
 - :VreStorage
 - :Electrolyzer
 - :AllamCycleLox
@@ -20,6 +21,7 @@ const resource_types = (:Thermal,
     :Storage,
     :MustRun,
     :FlexDemand,
+    :IndustrialLoad,
     :VreStorage,
     :Electrolyzer,
     :AllamCycleLOX)
@@ -717,7 +719,7 @@ function efficiency_down(r::T) where {T <: Union{Hydro, Storage}}
 end
 
 # Ramp up and down
-const VarPower = Union{Electrolyzer, Hydro, Thermal}
+const VarPower = Union{Electrolyzer, Hydro, IndustrialLoad, Thermal}
 min_power(r::VarPower) = get(r, :min_power, default_zero)
 ramp_up_fraction(r::VarPower) = get(r, :ramp_up_percentage, default_percent)
 ramp_down_fraction(r::VarPower) = get(r, :ramp_dn_percentage, default_percent)
@@ -900,6 +902,23 @@ flexible_demand_energy_eff(r::FlexDemand) = r.flexible_demand_energy_eff
 max_flexible_demand_delay(r::FlexDemand) = r.max_flexible_demand_delay
 max_flexible_demand_advance(r::FlexDemand) = r.max_flexible_demand_advance
 var_om_cost_per_mwh_in(r::FlexDemand) = get(r, :var_om_cost_per_mwh_in, default_zero)
+
+# INDUSTRIAL_LOAD interface
+"""
+    industrial_load(rs::Vector{T}) where T <: AbstractResource
+
+Returns the indices of all industrial load resources in the vector `rs`.
+"""
+industrial_load(rs::Vector{T}) where {T <: AbstractResource} = findall(
+    r -> isa(r, IndustrialLoad),
+    rs)
+inventory_cost_per_mwhyr(r::IndustrialLoad) = get(r, :inventory_cost_per_mwhyr, default_zero)
+inventory_mwh_per_mw(r::IndustrialLoad) = get(r, :inventory_mwh_per_mw, default_zero)
+annual_mwh_per_mwyr(r::IndustrialLoad) = get(r, :annual_mwh_per_mwyr, default_zero)
+industrial_value_per_mwh(r::IndustrialLoad) = get(r, :industrial_value_per_mwh, default_zero)
+min_up_time_hours(r::IndustrialLoad) = get(r, :min_up_time_hours, default_zero)
+min_down_time_hours(r::IndustrialLoad) = get(r, :min_down_time_hours, default_zero)
+var_om_cost_per_mwh_in(r::IndustrialLoad) = get(r, :var_om_cost_per_mwh_in, default_zero)
 
 # MUST_RUN interface
 """

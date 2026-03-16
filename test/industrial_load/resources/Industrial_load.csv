@@ -1,0 +1,2 @@
+Resource,Zone,New_Build,Can_Retire,Existing_Cap_MW,Max_Cap_MW,Min_Cap_MW,Inv_Cost_per_MWyr,Fixed_OM_Cost_per_MWyr,Var_OM_Cost_per_MWh,Cap_Size,Min_Power,Ramp_Up_Percentage,Ramp_Dn_Percentage,Inventory_Cost_per_MWhyr,Inventory_MWh_per_MW,Annual_MWh_per_MWyr,Industrial_Value_per_MWh,Min_Up_Time_Hours,Min_Down_Time_Hours,region,technology,cluster
+industrial_load,1,0,0,25,25,25,0,5000,1,1,0.4,0.25,0.25,3,4,5000,40,4,4,NE,cement_mill,0

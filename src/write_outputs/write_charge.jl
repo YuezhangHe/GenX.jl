@@ -11,6 +11,7 @@ function write_charge(path::AbstractString, inputs::Dict, setup::Dict, EP::Model
     T = inputs["T"]     # Number of time steps (hours)
     STOR_ALL = inputs["STOR_ALL"]
     FLEX = inputs["FLEX"]
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
     ELECTROLYZER = inputs["ELECTROLYZER"]
     ALLAM_CYCLE_LOX = inputs["ALLAM_CYCLE_LOX"] 
     VRE_STOR = inputs["VRE_STOR"]
@@ -30,7 +31,11 @@ function write_charge(path::AbstractString, inputs::Dict, setup::Dict, EP::Model
         push!(charge, value.(EP[:vCHARGE_FLEX]))
         push!(charge_ids, FLEX)
     end
-    if (setup["HydrogenMinimumProduction"] > 0) & (!isempty(ELECTROLYZER))
+    if !isempty(INDUSTRIAL_LOAD)
+        push!(charge, value.(EP[:vUSE_IND]))
+        push!(charge_ids, INDUSTRIAL_LOAD)
+    end
+    if !isempty(ELECTROLYZER)
         push!(charge, value.(EP[:vUSE]))
         push!(charge_ids, ELECTROLYZER)
     end

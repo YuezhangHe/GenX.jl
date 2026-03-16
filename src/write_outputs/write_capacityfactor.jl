@@ -12,6 +12,7 @@ function write_capacityfactor(path::AbstractString, inputs::Dict, setup::Dict, E
     VRE = inputs["VRE"]
     HYDRO_RES = inputs["HYDRO_RES"]
     MUST_RUN = inputs["MUST_RUN"]
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
     ELECTROLYZER = inputs["ELECTROLYZER"]
     VRE_STOR = inputs["VRE_STOR"]
     ALLAM_CYCLE_LOX = inputs["ALLAM_CYCLE_LOX"]
@@ -73,6 +74,12 @@ function write_capacityfactor(path::AbstractString, inputs::Dict, setup::Dict, E
         df.CapacityFactor[ELECTROLYZER] .= (df.AnnualSum[ELECTROLYZER] ./
                                             df.Capacity[ELECTROLYZER]) /
                                            sum(weight)
+    end
+    if !isempty(INDUSTRIAL_LOAD)
+        df.AnnualSum[INDUSTRIAL_LOAD] .= energy_sum(:vUSE_IND, INDUSTRIAL_LOAD)
+        df.CapacityFactor[INDUSTRIAL_LOAD] .= (df.AnnualSum[INDUSTRIAL_LOAD] ./
+                                               df.Capacity[INDUSTRIAL_LOAD]) /
+                                              sum(weight)
     end
 
     if !isempty(ALLAM_CYCLE_LOX)

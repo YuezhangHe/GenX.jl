@@ -189,6 +189,11 @@ function generate_model(setup::Dict, inputs::Dict, OPTIMIZER::MOI.OptimizerWithA
         flexible_demand!(EP, inputs, setup)
     end
 
+    # Model constraints, variables, expressions related to industrial load resources
+    if !isempty(inputs["INDUSTRIAL_LOAD"])
+        industrial_load!(EP, inputs, setup)
+    end
+
     # Model constraints, variables, expression related to thermal resource technologies
     if !isempty(inputs["THERM_ALL"])
         thermal!(EP, inputs, setup)

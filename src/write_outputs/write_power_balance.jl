@@ -9,6 +9,7 @@ function write_power_balance(path::AbstractString, inputs::Dict, setup::Dict, EP
     HYDRO_RES = inputs["HYDRO_RES"]
     STOR_ALL = inputs["STOR_ALL"]
     FLEX = inputs["FLEX"]
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
     ALLAM_CYCLE_LOX = inputs["ALLAM_CYCLE_LOX"]
     ELECTROLYZER = inputs["ELECTROLYZER"]
     VRE_STOR = inputs["VRE_STOR"]
@@ -18,6 +19,9 @@ function write_power_balance(path::AbstractString, inputs::Dict, setup::Dict, EP
         "Demand_Response", "Nonserved_Energy",
         "Transmission_NetExport", "Transmission_Losses",
         "Demand"]
+    if !isempty(INDUSTRIAL_LOAD)
+        push!(Com_list, "Industrial_Load_Consumption")
+    end
     if !isempty(ELECTROLYZER)
         push!(Com_list, "Electrolyzer_Consumption")
     end
@@ -68,37 +72,33 @@ function write_power_balance(path::AbstractString, inputs::Dict, setup::Dict, EP
             powerbalance[(z - 1) * L + 9, :] = -(value.(EP[:eLosses_By_Zone][z, :]))
         end
         powerbalance[(z - 1) * L + 10, :] = (((-1) * inputs["pD"][:, z]))' # Transpose
+        idx = 11
+        if !isempty(INDUSTRIAL_LOAD)
+            INDUSTRIAL_LOAD_ZONE = intersect(resources_in_zone_by_rid(gen, z), INDUSTRIAL_LOAD)
+            powerbalance[(z - 1) * L + idx, :] = (-1) * sum(
+                value.(EP[:vUSE_IND][INDUSTRIAL_LOAD_ZONE, :].data),
+                dims = 1)
+            idx += 1
+        end
         if !isempty(ELECTROLYZER)
             ELECTROLYZER_ZONE = intersect(resources_in_zone_by_rid(gen, z), ELECTROLYZER)
-            powerbalance[(z - 1) * L + 11, :] = (-1) * sum(
+            powerbalance[(z - 1) * L + idx, :] = (-1) * sum(
                 value.(EP[:vUSE][ELECTROLYZER_ZONE,:].data),
                 dims = 1)
+            idx += 1
         end
         # VRE storage discharge and charge
         if !isempty(intersect(resources_in_zone_by_rid(gen, z), VRE_STOR))
             VS_ALL_ZONE = intersect(resources_in_zone_by_rid(gen, z), inputs["VS_STOR"])
 
-            # if ELECTROLYZER is not empty, increase indices by 1
-            is_electrolyzer_empty = isempty(ELECTROLYZER)
-            discharge_idx = is_electrolyzer_empty ? 11 : 12
-            charge_idx = is_electrolyzer_empty ? 12 : 13
-
-            powerbalance[(z - 1) * L + discharge_idx, :] = sum(
+            powerbalance[(z - 1) * L + idx, :] = sum(
                 value.(EP[:vP][VS_ALL_ZONE, :]), dims = 1)
-            powerbalance[(z - 1) * L + charge_idx, :] = (-1) * sum(
+            powerbalance[(z - 1) * L + idx + 1, :] = (-1) * sum(
                 value.(EP[:vCHARGE_VRE_STOR][VS_ALL_ZONE, :]).data, dims = 1)
+            idx += 2
         end
         FUSION_ZONE = intersect(resources_in_zone_by_rid(gen, z), FUSION)
         if !isempty(FUSION_ZONE)
-            # this index-modification strategy is becoming unsustainable. We should just use
-            # a dataframe with named columns or something else.
-            idx = 11
-            if !isempty(ELECTROLYZER)
-                idx += 1
-            end
-            if !isempty(VRE_STOR)
-                idx += 2
-            end
             powerbalance[(z - 1) * L + idx, :] = -fusion_total_parasitic_power_unscaled(
                 EP, inputs, z)
         end

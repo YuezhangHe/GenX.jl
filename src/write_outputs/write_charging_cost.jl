@@ -10,6 +10,7 @@ function write_charging_cost(path::AbstractString, inputs::Dict, setup::Dict, EP
     T = inputs["T"]     # Number of time steps (hours)
     STOR_ALL = inputs["STOR_ALL"]
     FLEX = inputs["FLEX"]
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
     ELECTROLYZER = inputs["ELECTROLYZER"]
     VRE_STOR = inputs["VRE_STOR"]
     VS_STOR = !isempty(VRE_STOR) ? inputs["VS_STOR"] : []
@@ -28,6 +29,10 @@ function write_charging_cost(path::AbstractString, inputs::Dict, setup::Dict, EP
     if !isempty(FLEX)
         chargecost[FLEX, :] .= value.(EP[:vP][FLEX, :]) .*
                                transpose(price)[zone_id.(gen.FlexDemand), :]
+    end
+    if !isempty(INDUSTRIAL_LOAD)
+        chargecost[INDUSTRIAL_LOAD, :] .= (value.(EP[:vUSE_IND][INDUSTRIAL_LOAD, :]).data) .*
+                                          transpose(price)[zone_id.(gen.IndustrialLoad), :]
     end
     if !isempty(ELECTROLYZER)
         chargecost[ELECTROLYZER, :] .= (value.(EP[:vUSE][ELECTROLYZER, :]).data) .*

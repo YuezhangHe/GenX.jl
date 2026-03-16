@@ -13,6 +13,7 @@ function _get_resource_info()
         vre = (filename = "Vre.csv", type = Vre),
         storage = (filename = "Storage.csv", type = Storage),
         flex_demand = (filename = "Flex_demand.csv", type = FlexDemand),
+        industrial_load = (filename = "Industrial_load.csv", type = IndustrialLoad),
         must_run = (filename = "Must_run.csv", type = MustRun),
         electrolyzer = (filename = "Electrolyzer.csv", type = Electrolyzer),
         vre_stor = (filename = "Vre_stor.csv", type = VreStorage),
@@ -60,6 +61,7 @@ function _get_summary_map()
     names_map = Dict{Symbol, String}(:Electrolyzer => "Electrolyzer",
         :FlexDemand => "Flexible_demand",
         :Hydro => "Hydro",
+        :IndustrialLoad => "Industrial_load",
         :Storage => "Storage",
         :Thermal => "Thermal",
         :Vre => "VRE",
@@ -103,6 +105,8 @@ function scale_resources_data!(resource_in::DataFrame, scale_factor::Float64)
         :fixed_om_cost_charge_per_mwyr, # to $M/GW/yr
         :var_om_cost_per_mwh,           # to $M/GWh
         :var_om_cost_per_mwh_in,        # to $M/GWh
+        :inventory_cost_per_mwhyr,      # to $M/GWh/yr
+        :industrial_value_per_mwh,      # to $M/GWh
         :reg_cost,                      # to $M/GW
         :rsv_cost,                      # to $M/GW
         :min_retired_cap_mw,            # to GW
@@ -1170,6 +1174,10 @@ function add_resources_to_input_data!(inputs::Dict,
     ## FLEX
     # Set of flexible demand-side resources
     inputs["FLEX"] = flex_demand(gen)
+
+    ## INDUSTRIAL LOAD
+    # Set of industrial load resources
+    inputs["INDUSTRIAL_LOAD"] = industrial_load(gen)
 
     ## MUST_RUN
     # Set of must-run plants - could be behind-the-meter PV, hydro run-of-river, must-run fossil or thermal plants
