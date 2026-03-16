@@ -1,2 +1,2 @@
-Resource,Zone,New_Build,Can_Retire,Existing_Cap_MW,Existing_Inventory_MWh,Max_Cap_MW,Min_Cap_MW,Inv_Cost_per_MWyr,Fixed_OM_Cost_per_MWyr,Var_OM_Cost_per_MWh,Cap_Size,Min_Power,Ramp_Up_Percentage,Ramp_Dn_Percentage,Inventory_Cost_per_MWhyr,Annual_MWh_per_MWyr,region,technology,cluster
+Resource,Zone,New_Build,Can_Retire,Existing_Cap_MW,Existing_Inventory_MWh,Max_Cap_MW,Min_Cap_MW,Inv_Cost_per_MWyr,Fixed_OM_Cost_per_MWyr,Var_OM_Cost_per_MWh,Cap_Size,Min_Load,Ramp_Up_Percentage,Ramp_Dn_Percentage,Inventory_Cost_per_MWhyr,Annual_MWh_per_MWyr,region,technology,cluster
 industrial_load,1,1,0,25,0,35,25,1000,100,0,1,0.4,0.25,0.25,3,5000,NE,cement_mill,0

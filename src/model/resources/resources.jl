@@ -721,6 +721,7 @@ end
 # Ramp up and down
 const VarPower = Union{Electrolyzer, Hydro, IndustrialLoad, Thermal}
 min_power(r::VarPower) = get(r, :min_power, default_zero)
+min_power(r::IndustrialLoad) = get(r, :min_load, get(r, :min_power, default_zero))
 ramp_up_fraction(r::VarPower) = get(r, :ramp_up_percentage, default_percent)
 ramp_down_fraction(r::VarPower) = get(r, :ramp_dn_percentage, default_percent)
 
