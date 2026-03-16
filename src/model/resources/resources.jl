@@ -912,13 +912,9 @@ Returns the indices of all industrial load resources in the vector `rs`.
 industrial_load(rs::Vector{T}) where {T <: AbstractResource} = findall(
     r -> isa(r, IndustrialLoad),
     rs)
+existing_inventory_mwh(r::IndustrialLoad) = get(r, :existing_inventory_mwh, default_zero)
 inventory_cost_per_mwhyr(r::IndustrialLoad) = get(r, :inventory_cost_per_mwhyr, default_zero)
-inventory_mwh_per_mw(r::IndustrialLoad) = get(r, :inventory_mwh_per_mw, default_zero)
 annual_mwh_per_mwyr(r::IndustrialLoad) = get(r, :annual_mwh_per_mwyr, default_zero)
-industrial_value_per_mwh(r::IndustrialLoad) = get(r, :industrial_value_per_mwh, default_zero)
-min_up_time_hours(r::IndustrialLoad) = get(r, :min_up_time_hours, default_zero)
-min_down_time_hours(r::IndustrialLoad) = get(r, :min_down_time_hours, default_zero)
-var_om_cost_per_mwh_in(r::IndustrialLoad) = get(r, :var_om_cost_per_mwh_in, default_zero)
 
 # MUST_RUN interface
 """

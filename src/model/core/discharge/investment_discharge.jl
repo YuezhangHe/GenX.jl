@@ -45,6 +45,7 @@ function investment_discharge!(EP::Model, inputs::Dict, setup::Dict)
     COMMIT = inputs["COMMIT"] # Set of all resources eligible for unit commitment
     RETROFIT_CAP = inputs["RETROFIT_CAP"]  # Set of all resources being retrofitted
     ALLAM_CYCLE_LOX = inputs["ALLAM_CYCLE_LOX"] # Set of allam cycle resources
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
 
     ### Variables ###
 
@@ -113,7 +114,9 @@ function investment_discharge!(EP::Model, inputs::Dict, setup::Dict)
 
     ### Need editting ##
     @expression(EP, eCFix[y in 1:G],
-        if y in NEW_CAP # Resources eligible for new capacity (Non-Retrofit)
+        if y in INDUSTRIAL_LOAD
+            0.0
+        elseif y in NEW_CAP # Resources eligible for new capacity (Non-Retrofit)
             if y in COMMIT
                 inv_cost_per_mwyr(gen[y]) * cap_size(gen[y]) * vCAP[y] +
                 fixed_om_cost_per_mwyr(gen[y]) * eTotalCap[y]

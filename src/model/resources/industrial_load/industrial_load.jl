@@ -1,80 +1,105 @@
 @doc raw"""
     industrial_load!(EP::Model, inputs::Dict, setup::Dict)
 
-This function defines the operating constraints for industrial load resources. Industrial
-loads are electricity-consuming resources that can represent electro-intensive processes
-such as electrolytic refining, grinding mills, or other flexible process loads.
+This module represents an industrial production system whose original electricity demand is
+treated as a fixed flat load, but which can become flexible through two endogenous
+investments:
 
-The current implementation activates three dimensions in the optimization:
-1. electricity consumption is subtracted from zonal power balance,
-2. minimum stable load is enforced through ``\phi^{min}``,
-3. backend material inventory cost is represented as an annual fixed adder using the
-   product inventory depth in MWh-equivalent per MW of industrial capacity.
+1. additional process capacity (``overcapacity``), and
+2. intermediate commodity inventory (``commodity storage``).
 
-Minimum up/down time and ramp-rate fields are loaded and reported, but intentionally not
-imposed as constraints in this version.
+The industrial resource consumes electricity directly from the power system. The produced
+intermediate commodity is tracked in electricity-equivalent MWh, assuming no conversion
+losses in this version. Annual commodity demand is anchored to the baseline fixed load
+using the existing industrial capacity and the parameter ``Annual_MWh_per_MWyr``.
 """
 function industrial_load!(EP::Model, inputs::Dict, setup::Dict)
     println("Industrial Load Module")
 
-    omega = inputs["omega"]
     gen = inputs["RESOURCES"]
 
     T = inputs["T"]
     Z = inputs["Z"]
-    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
+    p = inputs["hours_per_subperiod"]
+    ω = inputs["omega"]
 
-    @variable(EP, vUSE_IND[y = INDUSTRIAL_LOAD, t in 1:T] >= 0)
+    INDUSTRIAL_LOAD = inputs["INDUSTRIAL_LOAD"]
+    NEW_CAP = inputs["NEW_CAP"]
+
+    annual_modeled_hours = sum(ω)
+
+    baseline_annual_demand(y) =
+        existing_cap_mw(gen[y]) *
+        (annual_mwh_per_mwyr(gen[y]) > 0 ? annual_mwh_per_mwyr(gen[y]) : annual_modeled_hours)
 
     INDUSTRIAL_LOAD_BY_ZONE = map(1:Z) do z
         intersect(INDUSTRIAL_LOAD, resources_in_zone_by_rid(gen, z))
     end
+
+    @variable(EP, vUSE_IND[y = INDUSTRIAL_LOAD, t in 1:T] >= 0)
+    @variable(EP, vS_IND[y = INDUSTRIAL_LOAD, t in 1:T] >= 0)
+    @variable(EP, vCAP_INVENTORY_IND[y = INDUSTRIAL_LOAD] >= 0)
+
+    @expression(EP,
+        eIndustrialAnnualDemand[y in INDUSTRIAL_LOAD],
+        baseline_annual_demand(y))
+    @expression(EP,
+        eIndustrialDemandPerHour[y in INDUSTRIAL_LOAD],
+        EP[:eIndustrialAnnualDemand][y] / annual_modeled_hours)
+    @expression(EP,
+        eTotalCapInventoryIND[y in INDUSTRIAL_LOAD],
+        existing_inventory_mwh(gen[y]) + EP[:vCAP_INVENTORY_IND][y])
 
     @expression(EP, ePowerBalanceIndustrialLoad[t in 1:T, z in 1:Z],
         sum(EP[:vUSE_IND][y, t] for y in INDUSTRIAL_LOAD_BY_ZONE[z]))
     add_similar_to_expression!(EP[:ePowerBalance], -1.0, ePowerBalanceIndustrialLoad)
 
     @expression(EP,
-        eCVarIndustrialLoad[y in INDUSTRIAL_LOAD, t in 1:T],
-        omega[t] * var_om_cost_per_mwh_in(gen[y]) * EP[:vUSE_IND][y, t])
+        eCOverCapIndustrial[y in INDUSTRIAL_LOAD],
+        y in NEW_CAP ?
+        (inv_cost_per_mwyr(gen[y]) + fixed_om_cost_per_mwyr(gen[y])) * EP[:vCAP][y] :
+        0.0)
     @expression(EP,
-        eTotalCVarIndustrialLoadT[t in 1:T],
-        sum(eCVarIndustrialLoad[y, t] for y in INDUSTRIAL_LOAD; init = 0))
-    @expression(EP,
-        eTotalCVarIndustrialLoad,
-        sum(eTotalCVarIndustrialLoadT[t] for t in 1:T))
-    add_to_expression!(EP[:eObj], eTotalCVarIndustrialLoad)
+        eTotalCOverCapIndustrial,
+        sum(eCOverCapIndustrial[y] for y in INDUSTRIAL_LOAD; init = 0.0))
+    add_to_expression!(EP[:eObj], eTotalCOverCapIndustrial)
 
     @expression(EP,
-        eCInvIndustrialLoad[y in INDUSTRIAL_LOAD],
-        inventory_cost_per_mwhyr(gen[y]) *
-        inventory_mwh_per_mw(gen[y]) *
-        EP[:eTotalCap][y])
+        eCInventoryIndustrial[y in INDUSTRIAL_LOAD],
+        inventory_cost_per_mwhyr(gen[y]) * EP[:vCAP_INVENTORY_IND][y])
     @expression(EP,
-        eTotalCInvIndustrialLoad,
-        sum(eCInvIndustrialLoad[y] for y in INDUSTRIAL_LOAD; init = 0))
-    add_to_expression!(EP[:eObj], eTotalCInvIndustrialLoad)
+        eTotalCInventoryIndustrial,
+        sum(eCInventoryIndustrial[y] for y in INDUSTRIAL_LOAD; init = 0.0))
+    add_to_expression!(EP[:eObj], eTotalCInventoryIndustrial)
 
-    @expression(EP,
-        eIndustrialValue[y in INDUSTRIAL_LOAD, t in 1:T],
-        omega[t] * industrial_value_per_mwh(gen[y]) * EP[:vUSE_IND][y, t])
-    @expression(EP,
-        eTotalIndustrialValueT[t in 1:T],
-        sum(eIndustrialValue[y, t] for y in INDUSTRIAL_LOAD; init = 0))
-    @expression(EP,
-        eTotalIndustrialValue,
-        sum(eTotalIndustrialValueT[t] for t in 1:T))
-    add_to_expression!(EP[:eObj], -1.0, eTotalIndustrialValue)
+    @constraint(EP,
+        cIndustrialInventoryStart[y in INDUSTRIAL_LOAD, t in inputs["START_SUBPERIODS"]],
+        EP[:vS_IND][y, t] ==
+        EP[:vS_IND][y, hoursbefore(p, t, 1)] +
+        EP[:vUSE_IND][y, t] -
+        EP[:eIndustrialDemandPerHour][y])
 
     @constraints(EP,
         begin
-            [y in INDUSTRIAL_LOAD, t in 1:T],
+            cIndustrialInventoryInterior[y in INDUSTRIAL_LOAD, t in inputs["INTERIOR_SUBPERIODS"]],
+            EP[:vS_IND][y, t] ==
+            EP[:vS_IND][y, t - 1] +
+            EP[:vUSE_IND][y, t] -
+            EP[:eIndustrialDemandPerHour][y]
+
+            cIndustrialInventoryMax[y in INDUSTRIAL_LOAD, t in 1:T],
+            EP[:vS_IND][y, t] <= EP[:eTotalCapInventoryIND][y]
+
+            cIndustrialAnnualDemand[y in INDUSTRIAL_LOAD],
+            sum(ω[t] * EP[:vUSE_IND][y, t] for t in 1:T) == EP[:eIndustrialAnnualDemand][y]
+
+            cIndustrialMinimumLoad[y in INDUSTRIAL_LOAD, t in 1:T],
             EP[:vUSE_IND][y, t] >= min_power(gen[y]) * EP[:eTotalCap][y]
 
-            [y in INDUSTRIAL_LOAD, t in 1:T],
-            EP[:vUSE_IND][y, t] <= inputs["pP_Max"][y, t] * EP[:eTotalCap][y]
+            cIndustrialMaximumLoad[y in INDUSTRIAL_LOAD, t in 1:T],
+            EP[:vUSE_IND][y, t] <= EP[:eTotalCap][y]
 
-            [y in INDUSTRIAL_LOAD, t in 1:T],
+            cIndustrialPowerVariableOff[y in INDUSTRIAL_LOAD, t in 1:T],
             EP[:vP][y, t] == 0
         end)
 

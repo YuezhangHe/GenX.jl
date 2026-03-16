@@ -105,8 +105,8 @@ function scale_resources_data!(resource_in::DataFrame, scale_factor::Float64)
         :fixed_om_cost_charge_per_mwyr, # to $M/GW/yr
         :var_om_cost_per_mwh,           # to $M/GWh
         :var_om_cost_per_mwh_in,        # to $M/GWh
+        :existing_inventory_mwh,        # to GWh-equivalent
         :inventory_cost_per_mwhyr,      # to $M/GWh/yr
-        :industrial_value_per_mwh,      # to $M/GWh
         :reg_cost,                      # to $M/GW
         :rsv_cost,                      # to $M/GW
         :min_retired_cap_mw,            # to GW

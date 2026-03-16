@@ -6,26 +6,45 @@ function write_industrial_load_summary(path::AbstractString,
     isempty(INDUSTRIAL_LOAD) && return nothing
 
     gen = inputs["RESOURCES"]
-    weight = inputs["omega"]
+    ω = inputs["omega"]
+
     power_scale = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1.0
     cost_per_mwyr_scale = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1.0
     cost_per_mwhyr_scale = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1.0
 
-    capacity_mw = value.(EP[:eTotalCap][INDUSTRIAL_LOAD]) .* power_scale
-    annual_consumption_mwh = value.(EP[:vUSE_IND][INDUSTRIAL_LOAD, :]).data * weight .* power_scale
-    annualized_fixed_cost_per_mwyr = (inv_cost_per_mwyr.(gen[INDUSTRIAL_LOAD]) .+
-                                      fixed_om_cost_per_mwyr.(gen[INDUSTRIAL_LOAD])) .* cost_per_mwyr_scale
-    annualized_fixed_cost_per_kwyr = annualized_fixed_cost_per_mwyr ./ ModelScalingFactor
-    inventory_cost_per_mwhyr_human = inventory_cost_per_mwhyr.(gen[INDUSTRIAL_LOAD]) .* cost_per_mwhyr_scale
-    inventory_cost_adder_per_mwyr = inventory_cost_per_mwhyr_human .* inventory_mwh_per_mw.(gen[INDUSTRIAL_LOAD])
+    annual_modeled_hours = sum(ω)
+    baseline_annual_demand(y) =
+        existing_cap_mw(gen[y]) *
+        (annual_mwh_per_mwyr(gen[y]) > 0 ? annual_mwh_per_mwyr(gen[y]) : annual_modeled_hours)
 
-    annualized_fixed_cost_per_mwh_annual = Vector{Union{Missing, Float64}}(missing,
+    existing_capacity_mw = existing_cap_mw.(gen[INDUSTRIAL_LOAD]) .* power_scale
+    total_capacity_mw = [value(EP[:eTotalCap][y]) * power_scale for y in INDUSTRIAL_LOAD]
+    overcapacity_mw = [y in inputs["NEW_CAP"] ? value(EP[:vCAP][y]) * power_scale : 0.0
+                       for y in INDUSTRIAL_LOAD]
+    annual_consumption_mwh = [
+        sum(value(EP[:vUSE_IND][y, t]) * ω[t] for t in 1:length(ω)) * power_scale for
+        y in INDUSTRIAL_LOAD
+    ]
+    annual_demand_mwh = baseline_annual_demand.(INDUSTRIAL_LOAD) .* power_scale
+    storage_capacity_mwheq = [
+        value(EP[:eTotalCapInventoryIND][y]) * power_scale for y in INDUSTRIAL_LOAD
+    ]
+    new_storage_capacity_mwheq = [
+        value(EP[:vCAP_INVENTORY_IND][y]) * power_scale for y in INDUSTRIAL_LOAD
+    ]
+
+    overcapacity_cost_per_mwyr = (inv_cost_per_mwyr.(gen[INDUSTRIAL_LOAD]) .+
+                                  fixed_om_cost_per_mwyr.(gen[INDUSTRIAL_LOAD])) .* cost_per_mwyr_scale
+    overcapacity_cost_per_kwyr = overcapacity_cost_per_mwyr ./ ModelScalingFactor
+    storage_cost_per_mwhyr = inventory_cost_per_mwhyr.(gen[INDUSTRIAL_LOAD]) .* cost_per_mwhyr_scale
+
+    load_equivalent_capex_per_mwh_annual = Vector{Union{Missing, Float64}}(missing,
         length(INDUSTRIAL_LOAD))
     for (i, y) in enumerate(INDUSTRIAL_LOAD)
         annual_mwh = annual_mwh_per_mwyr(gen[y])
         if annual_mwh > 0
-            annualized_fixed_cost_per_mwh_annual[i] =
-                annualized_fixed_cost_per_mwyr[i] / annual_mwh
+            load_equivalent_capex_per_mwh_annual[i] =
+                overcapacity_cost_per_mwyr[i] / annual_mwh
         end
     end
 
@@ -34,20 +53,19 @@ function write_industrial_load_summary(path::AbstractString,
         Zone = zone_id.(gen[INDUSTRIAL_LOAD]),
         Region = region.(gen[INDUSTRIAL_LOAD]),
         Cluster = cluster.(gen[INDUSTRIAL_LOAD]),
-        Capacity_MW = capacity_mw,
-        AnnualConsumption_MWh = annual_consumption_mwh,
-        CapacityFactor = annual_consumption_mwh ./ (capacity_mw .* sum(weight)),
-        AnnualizedFixedCost_per_kWyr = annualized_fixed_cost_per_kwyr,
-        AnnualizedFixedCost_per_MWh_annual = annualized_fixed_cost_per_mwh_annual,
-        MinStableLoad = min_power.(gen[INDUSTRIAL_LOAD]),
-        InventoryCost_per_MWhyr = inventory_cost_per_mwhyr_human,
-        InventoryEquivalentHours = inventory_mwh_per_mw.(gen[INDUSTRIAL_LOAD]),
-        InventoryCostAdder_per_MWyr = inventory_cost_adder_per_mwyr,
-        MinUpTimeHours = min_up_time_hours.(gen[INDUSTRIAL_LOAD]),
-        MinDownTimeHours = min_down_time_hours.(gen[INDUSTRIAL_LOAD]),
-        RampUpPctPerHour = ramp_up_fraction.(gen[INDUSTRIAL_LOAD]),
-        RampDownPctPerHour = ramp_down_fraction.(gen[INDUSTRIAL_LOAD]),
-        IndustrialValue_per_MWh = industrial_value_per_mwh.(gen[INDUSTRIAL_LOAD]) .* cost_per_mwhyr_scale,
+        ExistingCapacity_MW = existing_capacity_mw,
+        TotalCapacity_MW = total_capacity_mw,
+        SelectedOvercapacity_MW = overcapacity_mw,
+        MinLoadFraction = min_power.(gen[INDUSTRIAL_LOAD]),
+        FlexibleLoadRange = 1 .- min_power.(gen[INDUSTRIAL_LOAD]),
+        AnnualCommodityDemand_MWhEq = annual_demand_mwh,
+        AnnualElectricityUse_MWh = annual_consumption_mwh,
+        ExistingInventory_MWhEq = existing_inventory_mwh.(gen[INDUSTRIAL_LOAD]) .* power_scale,
+        TotalInventory_MWhEq = storage_capacity_mwheq,
+        SelectedInventory_MWhEq = new_storage_capacity_mwheq,
+        OvercapacityCost_per_kWyr = overcapacity_cost_per_kwyr,
+        OvercapacityCost_per_MWhAnnual = load_equivalent_capex_per_mwh_annual,
+        InventoryCost_per_MWhEqYr = storage_cost_per_mwhyr,
     )
     CSV.write(joinpath(path, "industrial_load_summary.csv"), df)
     return df
